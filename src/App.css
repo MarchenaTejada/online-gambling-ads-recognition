@@ -1,0 +1,161 @@
+body, html, #root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+h2 {
+  font-weight: 600;
+  color: #14532d;
+}
+
+p {
+  font-size: 1.1rem;
+  color: #4b5563;
+}
+
+footer {
+  background-color: #14532d;
+  color: white;
+  padding: 1rem 0;
+  text-align: center;
+  margin-top: auto; 
+}
+
+.container {
+  flex: 1;
+}
+
+.input-group input {
+  border-right: none;
+}
+
+.input-group .btn {
+  border-left: none;
+}
+
+button {
+  font-weight: 600;
+  padding: 0.5rem 1.5rem;
+  border-radius: 8px;
+}
+
+.alert {
+  font-size: 1.05rem;
+  padding: 2rem 1.5rem;
+  border-radius: 16px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.15);
+}
+
+.modal-content {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: flex;
+  justify-content: center;
+}
+
+.progress {
+  height: 1.5rem;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.progress-bar {
+  font-weight: bold;
+}
+
+.display-4 {
+  font-size: 2.5rem;
+}
+
+.custom-alert {
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+  padding: 2rem 1.5rem;
+  font-size: 1.1rem;
+  font-weight: 500;
+  border-radius: 16px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.custom-alert-success {
+  background-color: #e6f4ea; /* Verde pastel */
+  border: 2px solid #198754;
+  color: #14532d;
+}
+
+.custom-alert-warning {
+  background-color: #fcebea; /* Rojo pastel */
+  border: 2px solid #dc3545;
+  color: #721c24;
+}
+
+.text-success {
+  color: #198754 !important;
+}
+
+.text-danger {
+  color: #dc3545 !important;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.info-box {
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+  font-size: 1.05rem;
+}
+
+.gambling-risk {
+  background-color: #fff4f4;
+  border-left: 6px solid #dc3545;
+  color: #58151c;
+}
+
+.how-it-works {
+  background-color: #f0f9ff;
+  border-left: 6px solid #0d6efd;
+  color: #0c3c78;
+}
+
+.tips {
+  background-color: #f4fff8;
+  border-left: 6px solid #198754;
+  color: #0f5132;
+}
+
+ul {
+  padding-left: 1.5rem;
+}
