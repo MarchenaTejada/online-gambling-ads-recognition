@@ -90,34 +90,48 @@ class WebScraper:
             }
     
     async def _scrape_with_requests(self, url: str) -> Dict[str, Any]:
-        """Extraer contenido usando requests/aiohttp"""
-        session = await self._get_session()
+        """Extraer contenido usando requests (síncrono pero en executor)"""
+        import concurrent.futures
+        
+        def _fetch_sync():
+            try:
+                response = requests.get(
+                    url, 
+                    timeout=self.timeout,
+                    headers={'User-Agent': self.user_agent},
+                    allow_redirects=True
+                )
+                response.raise_for_status()
+                return response.text
+            except Exception as e:
+                self.logger.error(f"Error con requests: {e}")
+                raise
         
         try:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                html = await response.text()
-                
-                # Parsear HTML
-                soup = BeautifulSoup(html, 'html.parser')
-                
-                # Extraer información
-                result = {
-                    "url": url,
-                    "success": True,
-                    "html": html,
-                    "text": soup.get_text(separator=' ', strip=True),
-                    "title": soup.title.string if soup.title else "",
-                    "images": self._extract_images(soup, url),
-                    "metadata": self._extract_metadata(soup),
-                    "links": self._extract_links(soup, url),
-                    "scripts": self._extract_scripts(soup),
-                    "styles": self._extract_styles(soup)
-                }
-                
-                self.logger.info(f"✅ Contenido extraído: {len(result['text'])} caracteres")
-                return result
-                
+            # Ejecutar requests en un thread pool para no bloquear
+            loop = asyncio.get_event_loop()
+            html = await loop.run_in_executor(None, _fetch_sync)
+            
+            # Parsear HTML
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Extraer información
+            result = {
+                "url": url,
+                "success": True,
+                "html": html,
+                "text": soup.get_text(separator=' ', strip=True),
+                "title": soup.title.string if soup.title else "",
+                "images": self._extract_images(soup, url),
+                "metadata": self._extract_metadata(soup),
+                "links": self._extract_links(soup, url),
+                "scripts": self._extract_scripts(soup),
+                "styles": self._extract_styles(soup)
+            }
+            
+            self.logger.info(f"✅ Contenido extraído: {len(result['text'])} caracteres")
+            return result
+            
         except Exception as e:
             self.logger.error(f"Error con requests: {e}")
             # Intentar con Selenium como fallback

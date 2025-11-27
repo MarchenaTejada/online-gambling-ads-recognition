@@ -1,4 +1,10 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+
+interface FrameAnalysis {
+  url: string;
+  is_gambling: boolean;
+  probability?: number;
+}
 
 interface AnalysisResult {
   id: string;
@@ -7,7 +13,7 @@ interface AnalysisResult {
   link: string;
   has_gambling_ads: string;
   gambling_image_url?: string;
-  frames_analysis?: { url: string; is_gambling: boolean }[];
+  frames_analysis?: FrameAnalysis[];
 }
 
 function App() {
@@ -15,12 +21,47 @@ function App() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [frameAnalyses, setFrameAnalyses] = useState<FrameAnalysis[]>([]);
+  const [frameError, setFrameError] = useState("");
+  const [framesLoading, setFramesLoading] = useState(false);
+  const [framePage, setFramePage] = useState(1);
+  const framesPerPage = 10;
+
+  const fetchFrameAnalyses = async (imageUrls: string[]) => {
+    if (!imageUrls || imageUrls.length === 0) {
+      setFrameAnalyses([]);
+      setFrameError("");
+      return;
+    }
+    setFramesLoading(true);
+    setFrameError("");
+    try {
+      const response = await fetch("http://localhost:8000/analyze-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: imageUrls }),
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || "Error analizando imágenes");
+      }
+      const data = await response.json();
+      setFrameAnalyses(data);
+    } catch (err: any) {
+      setFrameError(err.message || "No se pudo obtener el análisis de imágenes");
+      setFrameAnalyses([]);
+    } finally {
+      setFramesLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     setResult(null);
+    setFrameAnalyses([]);
+    setFramePage(1);
     try {
       const response = await fetch("http://localhost:8000/simple-analyze", {
         method: "POST",
@@ -33,6 +74,9 @@ function App() {
       }
       const data = await response.json();
       setResult(data);
+      const candidateUrls =
+        (data.frames_analysis || []).map((frame: FrameAnalysis) => frame.url) ?? [];
+      await fetchFrameAnalyses(candidateUrls);
       setUrl("");
     } catch (err: any) {
       setError(err.message);
@@ -40,6 +84,19 @@ function App() {
       setLoading(false);
     }
   };
+
+  const totalPages = useMemo(
+    () => Math.ceil(frameAnalyses.length / framesPerPage),
+    [frameAnalyses.length]
+  );
+
+  const paginatedFrames = useMemo(() => {
+    const startIndex = (framePage - 1) * framesPerPage;
+    return frameAnalyses.slice(startIndex, startIndex + framesPerPage);
+  }, [frameAnalyses, framePage]);
+
+  const canGoPrev = framePage > 1;
+  const canGoNext = framePage < totalPages;
 
   return (
     <div style={{ minHeight: '100vh', background: 'none', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 1 }}>
@@ -99,33 +156,67 @@ function App() {
                 </div>
               )}
               {/* Listado de frames/imágenes analizados */}
-              {result.frames_analysis && result.frames_analysis.length > 0 && (
+              {(framesLoading || frameAnalyses.length > 0 || frameError) && (
                 <div style={{ marginTop: 32 }}>
                   <h4 style={{ fontSize: 17, color: '#1a2236', marginBottom: 10 }}>Listado de imágenes/frames analizados:</h4>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
-                    <thead>
-                      <tr style={{ background: '#f4f6fa' }}>
-                        <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>Miniatura</th>
-                        <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>URL</th>
-                        <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>¿Gambling?</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.frames_analysis.map((frame, idx) => (
-                        <tr key={idx}>
-                          <td style={{ border: '1px solid #e0e6f7', padding: 7, textAlign: 'center', background: '#f9fafc' }}>
-                            <img src={frame.url} alt={`frame-${idx}`} style={{ maxWidth: 60, maxHeight: 40, border: frame.is_gambling ? '2px solid #ff4d4f' : '1px solid #b0b8d1', borderRadius: 4, background: '#fff' }} />
-                          </td>
-                          <td style={{ border: '1px solid #e0e6f7', padding: 7, wordBreak: 'break-all', background: '#f9fafc' }}>
-                            <a href={frame.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2d6cdf' }}>{frame.url}</a>
-                          </td>
-                          <td style={{ border: '1px solid #e0e6f7', padding: 7, color: frame.is_gambling ? '#ff4d4f' : '#52c41a', fontWeight: 'bold', background: '#f9fafc' }}>
-                            {frame.is_gambling ? 'Sí' : 'No'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {framesLoading && <div style={{ marginBottom: 12 }}>Analizando imágenes...</div>}
+                  {frameError && <div style={{ color: '#ff4d4f', marginBottom: 12 }}>{frameError}</div>}
+                  {!framesLoading && !frameError && frameAnalyses.length === 0 && (
+                    <div style={{ color: '#444' }}>No se detectaron imágenes para analizar.</div>
+                  )}
+                  {!framesLoading && frameAnalyses.length > 0 && (
+                    <>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, background: '#fff', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+                        <thead>
+                          <tr style={{ background: '#f4f6fa' }}>
+                            <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>Miniatura</th>
+                            <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>URL</th>
+                            <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>Probabilidad</th>
+                            <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>¿Gambling?</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paginatedFrames.map((frame, idx) => (
+                            <tr key={`${frame.url}-${idx}`}>
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, textAlign: 'center', background: '#f9fafc' }}>
+                                <img src={frame.url} alt={`frame-${idx}`} style={{ maxWidth: 60, maxHeight: 40, border: frame.is_gambling ? '2px solid #ff4d4f' : '1px solid #b0b8d1', borderRadius: 4, background: '#fff' }} />
+                              </td>
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, wordBreak: 'break-all', background: '#f9fafc' }}>
+                                <a href={frame.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2d6cdf' }}>{frame.url}</a>
+                              </td>
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, background: '#f9fafc', fontWeight: 600 }}>
+                                {typeof frame.probability === "number" ? `${(frame.probability * 100).toFixed(1)}%` : "—"}
+                              </td>
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, color: frame.is_gambling ? '#ff4d4f' : '#52c41a', fontWeight: 'bold', background: '#f9fafc' }}>
+                                {frame.is_gambling ? 'Sí' : 'No'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {totalPages > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+                          <button
+                            onClick={() => setFramePage((prev) => Math.max(prev - 1, 1))}
+                            disabled={!canGoPrev}
+                            style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #b0b8d1', background: canGoPrev ? '#fff' : '#f4f6fa', cursor: canGoPrev ? 'pointer' : 'not-allowed' }}
+                          >
+                            Anterior
+                          </button>
+                          <span style={{ fontSize: 14, color: '#1a2236' }}>
+                            Página {framePage} de {totalPages}
+                          </span>
+                          <button
+                            onClick={() => setFramePage((prev) => Math.min(prev + 1, totalPages))}
+                            disabled={!canGoNext}
+                            style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #b0b8d1', background: canGoNext ? '#fff' : '#f4f6fa', cursor: canGoNext ? 'pointer' : 'not-allowed' }}
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -1,238 +1,143 @@
 import os
+import sys
+import logging
+from pathlib import Path
 import numpy as np
 from PIL import Image
-import tensorflow as tf
-from tensorflow.keras.models import load_model
 import asyncio
 from typing import List, Union
 import io
 import base64
 import requests
-from urllib.parse import urlparse
+
+# Importar Keras 3
+import keras
+from keras.models import load_model
+
+# Configurar logger
+logger = logging.getLogger("backend.detector")
+logger.setLevel(logging.INFO)
 
 class GamblingDetector:
-    def __init__(self, model_path: str = "../ResNet/ResNet.keras"):
-        """
-        Inicializar el detector de gambling con el modelo ResNet
-        
-        Args:
-            model_path: Ruta al modelo ResNet entrenado
-        """
+    def __init__(self):
         self.model = None
-        self.model_path = model_path
         self.is_model_loaded = False
-        self.BEST_THRESHOLD = 0.4931  # Umbral optimizado del notebook original
+        self.BEST_THRESHOLD = 0.4931
+        self.model_path = None
         
-        # Cargar modelo al inicializar
+        # Cargar modelo al iniciar
         self._load_model()
     
-    def _load_model(self):
-        """Cargar el modelo ResNet"""
-        try:
-            # Verificar si el archivo existe
-            if not os.path.exists(self.model_path):
-                print(f"⚠️ Modelo no encontrado en: {self.model_path}")
-                print("🔍 Buscando modelo en ubicaciones alternativas...")
-                
-                # Buscar en ubicaciones alternativas
-                alternative_paths = [
-                    "ResNet/ResNet.keras",
-                    "./ResNet/ResNet.keras",
-                    "../ResNet/ResNet.keras"
-                ]
-                
-                for alt_path in alternative_paths:
-                    if os.path.exists(alt_path):
-                        self.model_path = alt_path
-                        break
-                else:
-                    raise FileNotFoundError("Modelo ResNet no encontrado")
+    def _find_model(self) -> Path:
+        """Busca el archivo del modelo subiendo niveles de carpetas."""
+        cwd = Path.cwd()
+        path_from_cwd = cwd / "ResNet" / "ResNet.keras"
+        
+        if path_from_cwd.exists():
+            return path_from_cwd
+
+        script_path = Path(__file__).resolve()
+        path_from_script = script_path.parent.parent.parent / "ResNet" / "ResNet.keras"
+        
+        if path_from_script.exists():
+            return path_from_script
             
-            print(f"📦 Cargando modelo desde: {self.model_path}")
+        return None
+
+    def _load_model(self):
+        """Lógica interna de carga"""
+        try:
+            found_path = self._find_model()
+            
+            if not found_path:
+                logger.error("❌ CRÍTICO: No se encontró 'ResNet/ResNet.keras'.")
+                self.is_model_loaded = False
+                return
+
+            self.model_path = str(found_path)
+            logger.info(f"📦 Cargando modelo desde: {self.model_path}")
+            
             self.model = load_model(self.model_path)
             self.is_model_loaded = True
-            print("✅ Modelo ResNet cargado exitosamente")
+            logger.info("✅ GADIA: Modelo cargado y verificado en memoria.")
             
         except Exception as e:
-            print(f"❌ Error al cargar modelo: {str(e)}")
+            logger.error(f"❌ ERROR AL CARGAR MODELO: {e}")
             self.is_model_loaded = False
+
+    def load(self):
+        """Método público para reintentar carga."""
+        if not self.is_loaded():
+            self._load_model()
     
     def is_loaded(self) -> bool:
-        """Verificar si el modelo está cargado"""
         return self.is_model_loaded and self.model is not None
     
     def preprocess_image(self, image: Union[str, bytes, np.ndarray, Image.Image], 
-                        target_size: tuple = (224, 224)) -> np.ndarray:
-        """
-        Preprocesar imagen para el modelo
-        
-        Args:
-            image: Imagen en formato string (URL/base64), bytes, numpy array o PIL Image
-            target_size: Tamaño objetivo para redimensionar
-            
-        Returns:
-            Imagen preprocesada como numpy array
-        """
+                         target_size: tuple = (224, 224)) -> np.ndarray:
         try:
-            # Convertir diferentes formatos de entrada a PIL Image
-            if isinstance(image, str):
-                # URL o base64
+            pil_image = None
+            if isinstance(image, str): 
                 if image.startswith(('http://', 'https://')):
-                    # Es una URL
                     response = requests.get(image, timeout=10)
                     response.raise_for_status()
                     pil_image = Image.open(io.BytesIO(response.content))
-                else:
-                    # Es base64
-                    if ',' in image:
-                        image = image.split(',')[1]
+                elif ',' in image: 
+                    image_data = base64.b64decode(image.split(',')[1])
+                    pil_image = Image.open(io.BytesIO(image_data))
+                else: 
                     image_data = base64.b64decode(image)
                     pil_image = Image.open(io.BytesIO(image_data))
-            
             elif isinstance(image, bytes):
                 pil_image = Image.open(io.BytesIO(image))
-            
             elif isinstance(image, np.ndarray):
                 pil_image = Image.fromarray(image)
-            
             elif isinstance(image, Image.Image):
                 pil_image = image
+                
+            if pil_image is None: raise ValueError("Formato no reconocido")
+            if pil_image.mode != 'RGB': pil_image = pil_image.convert('RGB')
             
-            else:
-                raise ValueError("Formato de imagen no soportado")
-            
-            # Convertir a RGB si es necesario
-            if pil_image.mode != 'RGB':
-                pil_image = pil_image.convert('RGB')
-            
-            # Redimensionar
             pil_image = pil_image.resize(target_size)
-            
-            # Convertir a numpy array y normalizar
             image_array = np.array(pil_image) / 255.0
-            
-            # Agregar dimensión de batch si es necesario
-            if len(image_array.shape) == 3:
-                image_array = np.expand_dims(image_array, axis=0)
-            
+            if len(image_array.shape) == 3: image_array = np.expand_dims(image_array, axis=0)
             return image_array
+        except Exception as e:
+            logger.error(f"Error preprocesando: {e}")
+            raise
+
+    def predict(self, image) -> float:
+        """Predicción síncrona (usada internamente)"""
+        if not self.is_loaded(): raise RuntimeError("Modelo no cargado")
+        try:
+            processed = self.preprocess_image(image)
+            prediction = self.model.predict(processed, verbose=0)
+            
+            if isinstance(prediction, np.ndarray):
+                return float(prediction.flatten()[0])
+            return float(prediction[0])
             
         except Exception as e:
-            print(f"❌ Error en preprocesamiento: {str(e)}")
-            raise
-    
-    def predict(self, image: Union[str, bytes, np.ndarray, Image.Image]) -> float:
+            logger.error(f"❌ Error predicción: {e}")
+            return 0.0
+
+    async def predict_async(self, image) -> float:
         """
-        Predecir si una imagen contiene contenido de gambling
-        
-        Args:
-            image: Imagen a analizar
-            
-        Returns:
-            Probabilidad de que sea gambling (0.0 - 1.0)
+        Predicción asíncrona (ESTA ES LA QUE FALTABA).
+        Permite que FastAPI maneje otras peticiones mientras la IA piensa.
         """
         if not self.is_loaded():
-            raise RuntimeError("Modelo no está cargado")
+            self.load()
+            if not self.is_loaded(): return 0.0
         
-        try:
-            # Preprocesar imagen
-            processed_image = self.preprocess_image(image)
-            
-            # Realizar predicción
-            predictions = self.model.predict(processed_image, verbose=0)
-            
-            # Obtener probabilidad promedio (para múltiples frames)
-            if len(predictions.shape) > 1:
-                probability = np.mean(predictions.ravel())
-            else:
-                probability = float(predictions[0])
-            
-            return probability
-            
-        except Exception as e:
-            print(f"❌ Error en predicción: {str(e)}")
-            return 0.0
-    
-    async def predict_async(self, image: Union[str, bytes, np.ndarray, Image.Image]) -> float:
-        """
-        Versión asíncrona de predict para uso en FastAPI
-        """
-        # Ejecutar predicción en thread pool para no bloquear
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.predict, image)
-    
-    def predict_batch(self, images: List[Union[str, bytes, np.ndarray, Image.Image]]) -> List[float]:
-        """
-        Predecir múltiples imágenes de forma eficiente
-        
-        Args:
-            images: Lista de imágenes a analizar
-            
-        Returns:
-            Lista de probabilidades
-        """
-        if not self.is_loaded():
-            raise RuntimeError("Modelo no está cargado")
-        
-        try:
-            # Preprocesar todas las imágenes
-            processed_images = []
-            for img in images:
-                processed = self.preprocess_image(img)
-                processed_images.append(processed)
-            
-            # Concatenar en un batch
-            batch = np.vstack(processed_images)
-            
-            # Realizar predicción en batch
-            predictions = self.model.predict(batch, verbose=0)
-            
-            # Convertir a lista de probabilidades
-            probabilities = predictions.ravel().tolist()
-            
-            return probabilities
-            
-        except Exception as e:
-            print(f"❌ Error en predicción batch: {str(e)}")
-            return [0.0] * len(images)
-    
-    def classify_gambling(self, probability: float, threshold: float = None) -> dict:
-        """
-        Clasificar resultado basado en probabilidad
-        
-        Args:
-            probability: Probabilidad de gambling
-            threshold: Umbral personalizado (usa BEST_THRESHOLD por defecto)
-            
-        Returns:
-            Diccionario con clasificación y detalles
-        """
-        if threshold is None:
-            threshold = self.BEST_THRESHOLD
-        
-        is_gambling = probability > threshold
-        
-        return {
-            "probability": probability,
-            "threshold": threshold,
-            "is_gambling": is_gambling,
-            "confidence": "high" if abs(probability - threshold) > 0.2 else "medium",
-            "classification": "Gambling" if is_gambling else "No Gambling"
-        }
-    
+
     def get_model_info(self) -> dict:
-        """Obtener información del modelo"""
-        if not self.is_loaded():
-            return {"status": "not_loaded"}
-        
         return {
-            "status": "loaded",
-            "model_path": self.model_path,
-            "input_shape": self.model.input_shape,
-            "output_shape": self.model.output_shape,
-            "threshold": self.BEST_THRESHOLD,
-            "total_params": self.model.count_params()
+            "status": "loaded" if self.is_loaded() else "failed", 
+            "path": self.model_path
         }
 
-# Instancia global para uso en la aplicación
-gambling_detector = GamblingDetector() 
+# Instancia global
+gambling_detector = GamblingDetector()
