@@ -170,7 +170,7 @@ function App() {
                         <thead>
                           <tr style={{ background: '#f4f6fa' }}>
                             <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>Miniatura</th>
-                            <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>URL</th>
+                            <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>Enlace</th>
                             <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>Probabilidad</th>
                             <th style={{ border: '1px solid #e0e6f7', padding: 7 }}>¿Gambling?</th>
                           </tr>
@@ -178,16 +178,51 @@ function App() {
                         <tbody>
                           {paginatedFrames.map((frame, idx) => (
                             <tr key={`${frame.url}-${idx}`}>
+                              {/* Columna Miniatura */}
                               <td style={{ border: '1px solid #e0e6f7', padding: 7, textAlign: 'center', background: '#f9fafc' }}>
-                                <img src={frame.url} alt={`frame-${idx}`} style={{ maxWidth: 60, maxHeight: 40, border: frame.is_gambling ? '2px solid #ff4d4f' : '1px solid #b0b8d1', borderRadius: 4, background: '#fff' }} />
+                                <img src={frame.url} alt={`frame-${idx}`} style={{ maxWidth: 60, maxHeight: 40, objectFit: 'contain', border: frame.is_gambling ? '2px solid #ff4d4f' : '1px solid #b0b8d1', borderRadius: 4, background: '#fff' }} />
                               </td>
-                              <td style={{ border: '1px solid #e0e6f7', padding: 7, wordBreak: 'break-all', background: '#f9fafc' }}>
-                                <a href={frame.url} target="_blank" rel="noopener noreferrer" style={{ color: '#2d6cdf' }}>{frame.url}</a>
+
+                              {/* --- CAMBIO REALIZADO AQUÍ: Botón "Abrir" en lugar de URL larga --- */}
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, textAlign: 'center', background: '#f9fafc' }}>
+                                <a
+                                  href={frame.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={frame.url} // Muestra la URL completa al pasar el mouse
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    padding: '6px 12px',
+                                    backgroundColor: '#eff6ff',
+                                    color: '#2563eb',
+                                    borderRadius: '6px',
+                                    textDecoration: 'none',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    border: '1px solid #dbeafe',
+                                    transition: 'background-color 0.2s'
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dbeafe')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#eff6ff')}
+                                >
+                                  {/* Icono SVG de enlace externo */}
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                                    <polyline points="15 3 21 3 21 9" />
+                                    <line x1="10" y1="14" x2="21" y2="3" />
+                                  </svg>
+                                  Abrir
+                                </a>
                               </td>
-                              <td style={{ border: '1px solid #e0e6f7', padding: 7, background: '#f9fafc', fontWeight: 600 }}>
+                              {/* ------------------------------------------------------------- */}
+
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, background: '#f9fafc', fontWeight: 600, textAlign: 'center' }}>
                                 {typeof frame.probability === "number" ? `${(frame.probability * 100).toFixed(1)}%` : "—"}
                               </td>
-                              <td style={{ border: '1px solid #e0e6f7', padding: 7, color: frame.is_gambling ? '#ff4d4f' : '#52c41a', fontWeight: 'bold', background: '#f9fafc' }}>
+                              <td style={{ border: '1px solid #e0e6f7', padding: 7, color: frame.is_gambling ? '#ff4d4f' : '#52c41a', fontWeight: 'bold', background: '#f9fafc', textAlign: 'center' }}>
                                 {frame.is_gambling ? 'Sí' : 'No'}
                               </td>
                             </tr>
